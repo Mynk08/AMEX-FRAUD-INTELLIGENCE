@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AMEX Fraud Intelligence System</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0a0b0f;--surface:rgba(255,255,255,0.04);--border:rgba(255,255,255,0.08);
+    --text:#e8eaf0;--muted:#888;--dim:#555;
+    --green:#22c55e;--red:#ef4444;--amber:#f59e0b;--blue:#38bdf8;--purple:#a78bfa;--teal:#00d4aa;--amex:#006fcf;
+  }
+  html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px}
+  ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#111}::-webkit-scrollbar-thumb{background:#333;border-radius:4px}
+
+  /* animations */
+  @keyframes pulseRing{0%{box-shadow:0 0 0 0 currentColor}70%{box-shadow:0 0 0 6px transparent}100%{box-shadow:0 0 0 0 transparent}}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+  .slide-in{animation:slideIn .4s ease}
+  .fade-in{animation:fadeIn .3s ease}
+
+  /* layout */
+  header{border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:100}
+  .logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--amex),var(--teal));display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;letter-spacing:-1px;flex-shrink:0}
+  .header-title{font-size:14px;font-weight:700;letter-spacing:.04em}
+  .header-title span{color:var(--teal)}
+  .header-sub{font-size:10px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
+  .live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:pulseRing 1.5s ease-out infinite;color:var(--green)}
+  .live-label{font-size:11px;color:var(--green);font-weight:600;letter-spacing:.1em}
+  #clock{font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--teal);letter-spacing:2px}
+
+  /* tabs */
+  nav{padding:10px 28px 0;border-bottom:1px solid var(--border);display:flex;gap:4px}
+  .tab-btn{background:none;border:none;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:8px 18px;cursor:pointer;border-radius:6px;transition:all .2s;font-family:inherit}
+  .tab-btn.active{background:rgba(0,212,170,.12);color:var(--teal)}
+  .tab-btn:hover:not(.active){color:#aaa;background:rgba(255,255,255,.04)}
+
+  /* content */
+  main{padding:24px 28px;max-width:1200px}
+  .tab-pane{display:none}.tab-pane.active{display:block;animation:fadeIn .3s ease}
+
+  /* grids */
+  .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+  .grid-2{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;margin-bottom:24px}
+  .grid-2b{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+  .grid-sim{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .grid-impact{display:grid;grid-template-columns:1.2fr 1fr;gap:16px}
+
+  /* cards */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;transition:border-color .3s}
+  .card.flash{border-color:rgba(0,212,170,.3)}
+  .card-label{font-size:11px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+  .card-value{font-size:26px;font-weight:700;font-family:'DM Mono',monospace;letter-spacing:-1px}
+  .card-sub{font-size:11px;color:var(--dim);margin-top:4px}
+  .pulse-dot{position:absolute;top:14px;right:14px;width:8px;height:8px;border-radius:50%;animation:pulseRing 1.5s ease-out infinite}
+  .section-label{font-size:12px;color:var(--muted);font-weight:600;margin-bottom:14px;letter-spacing:.04em}
+
+  /* table */
+  .tx-table{width:100%;border-collapse:collapse;font-size:12px}
+  .tx-table th{color:var(--dim);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:6px 12px;text-align:left;font-weight:600}
+  .tx-table td{padding:8px 12px;border-top:1px solid rgba(255,255,255,.04)}
+  .tx-table tbody tr:first-child td{border-top:none}
+  .badge{padding:2px 10px;border-radius:99px;font-size:10px;font-weight:700;letter-spacing:.08em}
+  .badge-FRAUD{background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3)}
+  .badge-REVIEW{background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.3)}
+  .badge-CLEAN{background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.3)}
+  .score-bar-wrap{display:flex;align-items:center;gap:8px}
+  .score-bar-bg{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.08)}
+  .score-bar-fill{height:100%;border-radius:2px;transition:width .3s}
+  .score-val{font-family:'DM Mono',monospace;font-size:11px;min-width:28px}
+
+  /* fraud alert row */
+  .fraud-row{display:flex;align-items:center;justify-content:space-between;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:8px}
+
+  /* SHAP bars */
+  .shap-row{margin-bottom:10px}
+  .shap-label{display:flex;justify-content:space-between;font-size:11px;color:#bbb;margin-bottom:3px}
+  .shap-bar-bg{height:5px;border-radius:3px;background:rgba(255,255,255,.06)}
+  .shap-bar-fill{height:100%;border-radius:3px}
+
+  /* simulator */
+  .sim-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px 26px}
+  .sim-title{font-size:13px;font-weight:700;margin-bottom:20px;color:var(--text)}
+  .range-wrap{margin-bottom:20px}
+  .range-header{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px}
+  .range-val{font-family:'DM Mono',monospace;color:var(--teal)}
+  input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2px;background:rgba(255,255,255,.1);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--teal);cursor:pointer}
+  .select-wrap{margin-bottom:16px}
+  .select-label{font-size:12px;color:var(--muted);margin-bottom:6px}
+  select{background:#111;border:1px solid rgba(255,255,255,.1);color:var(--text);border-radius:6px;padding:7px 10px;font-size:13px;outline:none;font-family:inherit;width:100%}
+  .run-btn{width:100%;margin-top:8px;padding:12px 0;border-radius:8px;background:rgba(0,212,170,.15);border:1px solid rgba(0,212,170,.3);color:var(--teal);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;letter-spacing:.05em;transition:all .2s}
+  .run-btn:disabled{opacity:.6;cursor:not-allowed}
+  .run-btn:hover:not(:disabled){background:rgba(0,212,170,.25)}
+
+  /* sim result */
+  .sim-result{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px 26px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;text-align:center}
+  .sim-idle{color:#444}
+  .sim-idle-icon{font-size:48px;margin-bottom:12px}
+  .spinner{width:60px;height:60px;border:3px solid rgba(0,212,170,.2);border-top:3px solid var(--teal);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 20px}
+  .spin-label{color:var(--teal);font-size:13px;font-weight:600;letter-spacing:.1em}
+  .sim-score-label{font-size:11px;color:#666;letter-spacing:.1em;margin-bottom:12px}
+  .sim-score-value{font-size:80px;font-weight:900;font-family:'DM Mono',monospace;line-height:1}
+  .sim-verdict{font-size:18px;font-weight:700;margin-top:8px;letter-spacing:.12em}
+  .sim-msg{margin-top:20px;padding:14px 20px;border-radius:10px;font-size:12px;max-width:280px}
+  .sim-signals{margin-top:20px;display:flex;flex-direction:column;gap:8px;width:100%;max-width:280px}
+  .sim-signal-row{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+
+  /* metrics */
+  .metric-row{margin-bottom:12px}
+  .metric-header{display:flex;justify-content:space-between;font-size:12px;color:#aaa;margin-bottom:4px}
+  .metric-bar-bg{height:5px;border-radius:3px;background:rgba(255,255,255,.06)}
+  .metric-bar-fill{height:100%;border-radius:3px}
+
+  /* pie legend */
+  .pie-legend{display:flex;justify-content:center;gap:16px;margin-top:8px;flex-wrap:wrap}
+  .pie-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+  .pie-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+
+  /* canvas chart containers */
+  .chart-wrap{position:relative}
+
+  @media(max-width:900px){
+    .grid-4{grid-template-columns:repeat(2,1fr)}
+    .grid-2,.grid-2b,.grid-sim,.grid-impact{grid-template-columns:1fr}
+    main{padding:16px}
+    header{padding:12px 16px}
+    nav{padding:8px 16px 0;overflow-x:auto}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="logo">AX</div>
+    <div>
+      <div class="header-title">AMEX <span>FRAUD INTELLIGENCE</span></div>
+      <div class="header-sub">Risk &amp; Customer Intelligence Platform</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:18px">
+    <div style="display:flex;align-items:center;gap:6px">
+      <span class="live-dot"></span>
+      <span class="live-label">LIVE ENGINE</span>
+    </div>
+    <div id="clock">00:00:00</div>
+  </div>
+</header>
+
+<nav>
+  <button class="tab-btn active" onclick="switchTab('executive')">Executive</button>
+  <button class="tab-btn" onclick="switchTab('fraud')">Fraud Intel</button>
+  <button class="tab-btn" onclick="switchTab('simulator')">RT Simulator</button>
+  <button class="tab-btn" onclick="switchTab('impact')">Business Impact</button>
+</nav>
+
+<main>
+
+<!-- ═══════════════════════════════════ EXECUTIVE ═══════════════════════════════════ -->
+<div id="tab-executive" class="tab-pane active">
+  <div class="grid-4">
+    <div class="card">
+      <div class="pulse-dot" style="background:var(--teal);color:var(--teal)"></div>
+      <div class="card-label">Total Transactions</div>
+      <div class="card-value" id="kpi-total" style="color:var(--teal)">284,719</div>
+      <div class="card-sub">+12.4% vs last month</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Fraud Rate</div>
+      <div class="card-value" id="kpi-rate" style="color:var(--amber)">2.31%</div>
+      <div class="card-sub">-0.18pp model intervention</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Revenue Protected</div>
+      <div class="card-value" id="kpi-protected" style="color:var(--purple)">$4.70M</div>
+      <div class="card-sub">+$890K vs prev period</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Model AUC Score</div>
+      <div class="card-value" style="color:var(--blue)">0.9742</div>
+      <div class="card-sub">XGBoost — production</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="section-label">MONTHLY TRANSACTION VOLUME &amp; FRAUD TREND</div>
+      <div class="chart-wrap"><canvas id="volumeChart" height="160"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="section-label">FRAUD BY MERCHANT CATEGORY</div>
+      <div class="chart-wrap"><canvas id="merchantChart" height="160"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card" id="feed-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="section-label" style="margin-bottom:0">RECENT HIGH-RISK TRANSACTIONS</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;animation:pulseRing 1.5s ease-out infinite;color:var(--green)"></span>
+        <span style="font-size:10px;color:var(--green);font-weight:600">LIVE FEED</span>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tx-table">
+        <thead><tr>
+          <th>TX ID</th><th>Customer</th><th>Amount</th><th>Merchant</th><th>Location</th><th>Device</th><th>Risk Score</th><th>Status</th>
+        </tr></thead>
+        <tbody id="tx-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ FRAUD INTEL ═══════════════════════════════════ -->
+<div id="tab-fraud" class="tab-pane">
+  <div class="grid-4">
+    <div class="card">
+      <div class="pulse-dot" style="background:var(--red);color:var(--red)"></div>
+      <div class="card-label">Fraud Txns (MTD)</div>
+      <div class="card-value" id="kpi-fraud-count" style="color:var(--red)">6,577</div>
+      <div class="card-sub">Total flagged</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Avg Fraud Amount</div>
+      <div class="card-value" style="color:var(--amber)">$823</div>
+      <div class="card-sub">3.2x legit avg</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Night Fraud Rate</div>
+      <div class="card-value" style="color:var(--purple)">68%</div>
+      <div class="card-sub">00:00–06:00 UTC</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Catch Rate</div>
+      <div class="card-value" style="color:var(--green)">93.1%</div>
+      <div class="card-sub">Recall @ 0.5 threshold</div>
+    </div>
+  </div>
+
+  <div class="grid-2b">
+    <div class="card">
+      <div class="section-label">FRAUD BY DEVICE TYPE</div>
+      <div class="chart-wrap" style="max-width:260px;margin:0 auto"><canvas id="deviceChart" height="200"></canvas></div>
+      <div class="pie-legend">
+        <div class="pie-legend-item"><div class="pie-dot" style="background:var(--teal)"></div>Mobile</div>
+        <div class="pie-legend-item"><div class="pie-dot" style="background:var(--amex)"></div>Web</div>
+        <div class="pie-legend-item"><div class="pie-dot" style="background:var(--amber)"></div>POS</div>
+        <div class="pie-legend-item"><div class="pie-dot" style="background:var(--purple)"></div>ATM</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-label">TOP RISK SIGNALS (SHAP VALUES)</div>
+      <div id="shap-container"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="section-label" style="margin-bottom:0">FRAUD ALERTS ONLY — LIVE</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="width:6px;height:6px;border-radius:50%;background:var(--red);display:inline-block;animation:pulseRing 1.5s ease-out infinite;color:var(--red)"></span>
+        <span style="font-size:10px;color:var(--red);font-weight:600">LIVE</span>
+      </div>
+    </div>
+    <div id="fraud-feed" style="max-height:280px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ SIMULATOR ═══════════════════════════════════ -->
+<div id="tab-simulator" class="tab-pane">
+  <div class="grid-sim">
+    <div class="sim-card">
+      <div class="sim-title">Configure Transaction</div>
+
+      <div class="range-wrap">
+        <div class="range-header"><span>Amount (USD)</span><span class="range-val" id="amountDisplay">$250</span></div>
+        <input type="range" id="simAmount" min="1" max="10000" step="1" value="250" oninput="updateSim()">
+      </div>
+      <div class="range-wrap">
+        <div class="range-header"><span>Hour of Day</span><span class="range-val" id="hourDisplay">14:00 ☀️ Afternoon</span></div>
+        <input type="range" id="simHour" min="0" max="23" step="1" value="14" oninput="updateSim()">
+      </div>
+
+      <div class="select-wrap">
+        <div class="select-label">Merchant</div>
+        <select id="simMerchant" onchange="updateSim()">
+          <option>Electronics</option><option>Travel</option><option>Grocery</option><option>Gas Station</option>
+          <option>Restaurant</option><option>Retail</option><option>Pharmacy</option><option>Online</option>
+        </select>
+      </div>
+      <div class="select-wrap">
+        <div class="select-label">Location</div>
+        <select id="simLocation" onchange="updateSim()">
+          <option>Lagos, NG</option><option>Dubai, AE</option><option selected>New York, US</option><option>London, UK</option>
+          <option>Tokyo, JP</option><option>Paris, FR</option><option>Sydney, AU</option><option>Toronto, CA</option>
+        </select>
+      </div>
+      <div class="select-wrap">
+        <div class="select-label">Device</div>
+        <select id="simDevice" onchange="updateSim()">
+          <option>Mobile</option><option selected>Web</option><option>POS</option><option>ATM</option>
+        </select>
+      </div>
+
+      <button class="run-btn" id="runBtn" onclick="runSimulator()">▶ RUN FRAUD ASSESSMENT</button>
+    </div>
+
+    <div class="sim-result" id="simResult">
+      <div class="sim-idle">
+        <div class="sim-idle-icon">🛡️</div>
+        <div style="font-size:13px">Configure a transaction and run the assessment</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ BUSINESS IMPACT ═══════════════════════════════════ -->
+<div id="tab-impact" class="tab-pane">
+  <div class="grid-4">
+    <div class="card">
+      <div class="pulse-dot" style="background:var(--green);color:var(--green)"></div>
+      <div class="card-label">Fraud Loss Prevented</div>
+      <div class="card-value" id="kpi-impact-protected" style="color:var(--green)">$4.70M</div>
+      <div class="card-sub">Model interventions MTD</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Undetected Fraud</div>
+      <div class="card-value" style="color:var(--red)">$348K</div>
+      <div class="card-sub">False negatives (6.9%)</div>
+    </div>
+    <div class="card">
+      <div class="card-label">False Positive Cost</div>
+      <div class="card-value" style="color:var(--amber)">$92K</div>
+      <div class="card-sub">Declined legit txns</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Net Value Created</div>
+      <div class="card-value" id="kpi-net" style="color:var(--teal)">$4.61M</div>
+      <div class="card-sub">Prevented − FP cost</div>
+    </div>
+  </div>
+
+  <div class="grid-impact">
+    <div class="card">
+      <div class="section-label">MONTHLY ROI — PROTECTED vs COST</div>
+      <div class="chart-wrap"><canvas id="roiChart" height="200"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="section-label">MODEL PERFORMANCE METRICS</div>
+      <div id="metrics-container"></div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<script>
+// ── helpers ──────────────────────────────────────────────────────────────────
+const rand = (a,b) => Math.random()*(b-a)+a;
+const randInt = (a,b) => Math.floor(rand(a,b));
+const pick = a => a[randInt(0,a.length)];
+const fmt = n => n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtM = n => `$${(n/1e6).toFixed(2)}M`;
+
+const MERCHANTS = ["Electronics","Travel","Grocery","Gas Station","Restaurant","Retail","Pharmacy","Online"];
+const LOCATIONS = ["Lagos, NG","Dubai, AE","New York, US","London, UK","Tokyo, JP","Paris, FR","Sydney, AU","Toronto, CA"];
+const DEVICES   = ["Mobile","Web","POS","ATM"];
+const MONTHS    = ["Oct","Nov","Dec","Jan","Feb","Mar"];
+
+// ── state ────────────────────────────────────────────────────────────────────
+let state = { total:284719, fraudCount:6577, protected:4700000, auc:0.9742 };
+let txFeed = [];
+
+function scoreTransaction({amount, merchant, location, device, hour}) {
+  let s = 0;
+  if (amount>3000) s+=30; else if (amount>1000) s+=15;
+  if (["Lagos, NG","Dubai, AE"].includes(location)) s+=25;
+  if (merchant==="Electronics") s+=15;
+  if (merchant==="Travel") s+=10;
+  if (device==="Web") s+=10;
+  if (device==="Mobile") s+=5;
+  if (hour>=0 && hour<6) s+=20;
+  s+=randInt(0,15);
+  return Math.min(99,s);
+}
+
+function generateTx() {
+  const amount = Math.random()<0.08 ? rand(1500,8000) : rand(5,800);
+  const hour = randInt(0,24);
+  const merchant = pick(MERCHANTS);
+  const location = pick(LOCATIONS);
+  const device = pick(DEVICES);
+  const score = scoreTransaction({amount,merchant,location,device,hour});
+  const status = score>=80?"FRAUD":score>=55?"REVIEW":"CLEAN";
+  return {
+    id:`TX-${randInt(800000,999999)}`,
+    customer:`C-${randInt(1000,9999)}`,
+    amount:parseFloat(amount.toFixed(2)),
+    merchant, location, device, score, status, ts:Date.now()
+  };
+}
+
+for(let i=0;i<12;i++) txFeed.push(generateTx());
+
+// ── clock ────────────────────────────────────────────────────────────────────
+function tickClock() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-US',{hour12:false});
+}
+setInterval(tickClock,1000); tickClock();
+
+// ── KPI update ────────────────────────────────────────────────────────────────
+function updateKPIs() {
+  const rate = ((state.fraudCount/state.total)*100).toFixed(2);
+  document.getElementById('kpi-total').textContent = state.total.toLocaleString();
+  document.getElementById('kpi-rate').textContent = rate+'%';
+  document.getElementById('kpi-protected').textContent = fmtM(state.protected);
+  document.getElementById('kpi-fraud-count').textContent = state.fraudCount.toLocaleString();
+  document.getElementById('kpi-impact-protected').textContent = fmtM(state.protected);
+  document.getElementById('kpi-net').textContent = fmtM(state.protected-92000);
+}
+
+// ── TX Table ─────────────────────────────────────────────────────────────────
+function renderTxTable(flash) {
+  const tbody = document.getElementById('tx-tbody');
+  const card = document.getElementById('feed-card');
+  if(flash){card.classList.add('flash');setTimeout(()=>card.classList.remove('flash'),600);}
+
+  const rows = txFeed.slice(0,10).map((tx,i) => {
+    const amtColor = tx.amount>1000?'#f87171':'var(--text)';
+    const scoreColor = tx.score>=80?'#f87171':tx.score>=55?'#fbbf24':'#4ade80';
+    const barColor = tx.score>=80?'var(--red)':tx.score>=55?'var(--amber)':'var(--green)';
+    return `<tr${i===0?' class="slide-in"':''}>
+      <td style="font-family:'DM Mono',monospace;color:var(--teal);font-size:11px">${tx.id}</td>
+      <td style="color:#aaa">${tx.customer}</td>
+      <td style="font-family:'DM Mono',monospace;font-weight:700;color:${amtColor}">$${fmt(tx.amount)}</td>
+      <td style="color:#bbb">${tx.merchant}</td>
+      <td style="color:#888;font-size:11px">${tx.location}</td>
+      <td style="color:#777;font-size:11px">${tx.device}</td>
+      <td>
+        <div class="score-bar-wrap">
+          <div class="score-bar-bg"><div class="score-bar-fill" style="width:${tx.score}%;background:${barColor}"></div></div>
+          <span class="score-val" style="color:${scoreColor}">${tx.score}%</span>
+        </div>
+      </td>
+      <td><span class="badge badge-${tx.status}">${tx.status}</span></td>
+    </tr>`;
+  }).join('');
+  tbody.innerHTML = rows;
+}
+
+// ── Fraud Feed ────────────────────────────────────────────────────────────────
+function renderFraudFeed() {
+  const fraudTxs = txFeed.filter(t=>t.status==="FRAUD").slice(0,10);
+  const container = document.getElementById('fraud-feed');
+  container.innerHTML = fraudTxs.map((tx,i)=>`
+    <div class="fraud-row${i===0?' slide-in':''}">
+      <div style="display:flex;gap:20px;align-items:center">
+        <span style="font-family:'DM Mono',monospace;color:#f87171;font-size:11px">${tx.id}</span>
+        <span style="color:#aaa">${tx.merchant}</span>
+        <span style="color:#666;font-size:11px">${tx.location}</span>
+      </div>
+      <div style="display:flex;gap:16px;align-items:center">
+        <span style="font-family:'DM Mono',monospace;font-weight:700;color:#f87171">$${fmt(tx.amount)}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:#f87171">${tx.score}%</span>
+        <span class="badge badge-FRAUD">FRAUD</span>
+      </div>
+    </div>`).join('');
+}
+
+// ── Live feed interval ────────────────────────────────────────────────────────
+setInterval(()=>{
+  const tx = generateTx();
+  txFeed.unshift(tx);
+  if(txFeed.length>30) txFeed.pop();
+  state.total++;
+  if(tx.status==="FRAUD"){state.fraudCount++;state.protected+=tx.amount;}
+  updateKPIs();
+  renderTxTable(true);
+  renderFraudFeed();
+}, 2500);
+
+// ── Charts ────────────────────────────────────────────────────────────────────
+const chartDefaults = {
+  responsive:true, maintainAspectRatio:false,
+  plugins:{legend:{display:false},tooltip:{backgroundColor:'#111',borderColor:'#333',borderWidth:1,titleColor:'#aaa',bodyColor:'#ccc',padding:10}},
+};
+
+// Volume chart
+const volData = MONTHS.map((m,i)=>({
+  month:m, txns:220000+i*12000+randInt(0,8000), fraud:5000+i*200+randInt(0,300)
+}));
+new Chart(document.getElementById('volumeChart').getContext('2d'),{
+  type:'line',
+  data:{
+    labels:volData.map(d=>d.month),
+    datasets:[
+      {label:'Transactions',data:volData.map(d=>d.txns),borderColor:'#00d4aa',borderWidth:2,pointRadius:0,tension:.4,yAxisID:'y'},
+      {label:'Fraud Txns',data:volData.map(d=>d.fraud),borderColor:'#ef4444',borderWidth:2,pointRadius:0,tension:.4,borderDash:[4,2],yAxisID:'y2'},
+    ]
+  },
+  options:{...chartDefaults, plugins:{...chartDefaults.plugins,legend:{display:true,labels:{color:'#666',font:{size:11},boxWidth:12}}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#666',font:{size:11}}},
+      y:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#666',font:{size:10},callback:v=>`${(v/1000).toFixed(0)}k`},position:'left'},
+      y2:{grid:{display:false},ticks:{color:'#666',font:{size:10}},position:'right'},
+    }
+  }
+});
+
+// Merchant chart
+const merchantData = MERCHANTS.map(m=>({name:m,fraud:randInt(200,2800)})).sort((a,b)=>b.fraud-a.fraud);
+const mColors = merchantData.map((_,i)=>i===0?'#ef4444':i===1?'#f59e0b':i===2?'#f59e0b':'#00d4aa');
+new Chart(document.getElementById('merchantChart').getContext('2d'),{
+  type:'bar',
+  data:{
+    labels:merchantData.slice(0,6).map(d=>d.name),
+    datasets:[{label:'Fraud Txns',data:merchantData.slice(0,6).map(d=>d.fraud),backgroundColor:mColors,borderRadius:4,borderSkipped:'left'}]
+  },
+  options:{...chartDefaults,
+    indexAxis:'y',
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#666',font:{size:10}}},
+      y:{grid:{display:false},ticks:{color:'#aaa',font:{size:11}}},
+    }
+  }
+});
+
+// Device pie
+new Chart(document.getElementById('deviceChart').getContext('2d'),{
+  type:'doughnut',
+  data:{
+    labels:['Mobile','Web','POS','ATM'],
+    datasets:[{data:[38,29,22,11],backgroundColor:['#00d4aa','#006fcf','#f59e0b','#a78bfa'],borderWidth:0,hoverOffset:4}]
+  },
+  options:{...chartDefaults,cutout:'65%',
+    plugins:{...chartDefaults.plugins,legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.parsed}%`}}}
+  }
+});
+
+// ROI chart
+const roiMonths = MONTHS.map((m,i)=>({month:m,protected:600+i*80+randInt(0,50),fpCost:12+i*2+randInt(0,5)}));
+new Chart(document.getElementById('roiChart').getContext('2d'),{
+  type:'bar',
+  data:{
+    labels:roiMonths.map(d=>d.month),
+    datasets:[
+      {label:'Protected ($K)',data:roiMonths.map(d=>d.protected),backgroundColor:'#22c55e',borderRadius:4},
+      {label:'FP Cost ($K)',data:roiMonths.map(d=>d.fpCost),backgroundColor:'rgba(239,68,68,.7)',borderRadius:4},
+    ]
+  },
+  options:{...chartDefaults,
+    plugins:{...chartDefaults.plugins,legend:{display:true,labels:{color:'#666',font:{size:11},boxWidth:12}}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#666',font:{size:11}}},
+      y:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'#666',font:{size:10},callback:v=>`$${v}K`}},
+    }
+  }
+});
+
+// ── SHAP bars ────────────────────────────────────────────────────────────────
+const shapFeatures = [
+  {feature:"Transaction Amount",shap:0.82,pos:true},
+  {feature:"Geo Risk Score",shap:0.71,pos:true},
+  {feature:"Time of Day (Night)",shap:0.64,pos:true},
+  {feature:"Merchant Category",shap:0.55,pos:true},
+  {feature:"Device Fingerprint",shap:0.43,pos:true},
+  {feature:"Velocity (24h)",shap:0.38,pos:true},
+  {feature:"Avg Spend History",shap:0.29,pos:false},
+  {feature:"Account Age",shap:0.44,pos:false},
+];
+document.getElementById('shap-container').innerHTML = shapFeatures.map(({feature,shap,pos})=>`
+  <div class="shap-row">
+    <div class="shap-label">
+      <span>${feature}</span>
+      <span style="font-family:'DM Mono',monospace;color:${pos?'#f87171':'#4ade80'}">${pos?'+':'-'}${shap.toFixed(2)}</span>
+    </div>
+    <div class="shap-bar-bg">
+      <div class="shap-bar-fill" style="width:${shap*100}%;background:${pos?'#ef4444':'#22c55e'}"></div>
+    </div>
+  </div>`).join('');
+
+// ── Model metrics ─────────────────────────────────────────────────────────────
+const metrics = [
+  {metric:"Precision",value:91.4,invert:false},
+  {metric:"Recall (Catch Rate)",value:93.1,invert:false},
+  {metric:"F1 Score",value:92.2,invert:false},
+  {metric:"AUC-ROC",value:97.4,invert:false},
+  {metric:"False Positive Rate",value:3.2,invert:true},
+];
+document.getElementById('metrics-container').innerHTML = metrics.map(({metric,value,invert})=>`
+  <div class="metric-row">
+    <div class="metric-header">
+      <span>${metric}</span>
+      <span style="font-family:'DM Mono',monospace;color:${invert?'#f87171':'var(--teal)'}">${value}%</span>
+    </div>
+    <div class="metric-bar-bg">
+      <div class="metric-bar-fill" style="width:${value}%;background:${invert?'#ef4444':'linear-gradient(90deg,#006fcf,#00d4aa)'}"></div>
+    </div>
+  </div>`).join('');
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ── Simulator ────────────────────────────────────────────────────────────────
+function updateSim() {
+  const amount = +document.getElementById('simAmount').value;
+  const hour = +document.getElementById('simHour').value;
+  document.getElementById('amountDisplay').textContent = '$'+amount.toLocaleString();
+  const period = hour<6?'🌙 Night':hour<12?'🌅 Morning':hour<18?'☀️ Afternoon':'🌆 Evening';
+  document.getElementById('hourDisplay').textContent = `${String(hour).padStart(2,'0')}:00 ${period}`;
+}
+
+function runSimulator() {
+  const amount = +document.getElementById('simAmount').value;
+  const hour = +document.getElementById('simHour').value;
+  const merchant = document.getElementById('simMerchant').value;
+  const location = document.getElementById('simLocation').value;
+  const device = document.getElementById('simDevice').value;
+
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true; btn.textContent = '⟳ ANALYZING...';
+
+  document.getElementById('simResult').innerHTML = `
+    <div style="text-align:center">
+      <div class="spinner"></div>
+      <div class="spin-label">SCORING TRANSACTION...</div>
+    </div>`;
+
+  setTimeout(()=>{
+    const score = scoreTransaction({amount,merchant,location,device,hour});
+    const verdict = score>=80?'BLOCK':score>=55?'REVIEW':'APPROVE';
+    const color = {BLOCK:'#ef4444',REVIEW:'#f59e0b',APPROVE:'#22c55e'}[verdict];
+    const rgb = {BLOCK:'239,68,68',REVIEW:'245,158,11',APPROVE:'34,197,94'}[verdict];
+    const msg = {
+      BLOCK:'Multiple high-risk signals detected. Transaction blocked automatically.',
+      REVIEW:'Moderate risk signals detected. Flagged for analyst review.',
+      APPROVE:'Low risk profile. Transaction approved with standard monitoring.'
+    }[verdict];
+
+    const amtRisk = amount>3000?'HIGH':amount>500?'MEDIUM':'LOW';
+    const amtC = amount>3000?'#f87171':amount>500?'#fbbf24':'#4ade80';
+    const geoRisk = ["Lagos, NG","Dubai, AE"].includes(location)?'HIGH':'LOW';
+    const geoC = ["Lagos, NG","Dubai, AE"].includes(location)?'#f87171':'#4ade80';
+    const timeRisk = hour<6?'HIGH':'LOW';
+    const timeC = hour<6?'#f87171':'#4ade80';
+
+    document.getElementById('simResult').innerHTML = `
+      <div style="text-align:center;animation:fadeIn .5s ease">
+        <div class="sim-score-label">FRAUD SCORE OUTPUT</div>
+        <div class="sim-score-value" style="color:${color}">${score}%</div>
+        <div class="sim-verdict" style="color:${color}">${verdict}</div>
+        <div class="sim-msg" style="background:rgba(${rgb},.08);border:1px solid rgba(${rgb},.2);color:${color}">${msg}</div>
+        <div class="sim-signals">
+          <div class="sim-signal-row"><span>Amount Risk</span><span style="font-weight:700;color:${amtC}">${amtRisk}</span></div>
+          <div class="sim-signal-row"><span>Geo Risk</span><span style="font-weight:700;color:${geoC}">${geoRisk}</span></div>
+          <div class="sim-signal-row"><span>Time Risk</span><span style="font-weight:700;color:${timeC}">${timeRisk}</span></div>
+        </div>
+      </div>`;
+
+    btn.disabled=false; btn.textContent='▶ RUN FRAUD ASSESSMENT';
+  },900);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+updateKPIs();
+renderTxTable(false);
+renderFraudFeed();
+</script>
+</body>
+</html>
